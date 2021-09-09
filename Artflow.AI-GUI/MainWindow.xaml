@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Artflow.AI_GUI"
         mc:Ignorable="d"
-        Title="Cool Tool" Height="450" Width="800">
+        Title="Cool Tool" Height="500" Width="1000">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition></ColumnDefinition>
@@ -60,7 +60,12 @@
                 </StackPanel>
             </Border>
 
-            <Button Margin="20" x:Name="savePreview_btn" Click="savePreview_btn_Click">Save preview as PNG</Button>
+            <StackPanel Margin="20">
+                <Button x:Name="savePreview_btn" Click="savePreview_btn_Click">Save preview as PNG</Button>
+                <Button  x:Name="savePreviewDouble_btn" Click="savePreviewDouble_btn_Click">Save preview as PNG (double resolution)</Button>
+                <Button  x:Name="saveImage_btn" Click="saveImage_btn_Click">Save image (in case auto-save failed)</Button>
+
+            </StackPanel>
             
         </StackPanel>
     </Grid>

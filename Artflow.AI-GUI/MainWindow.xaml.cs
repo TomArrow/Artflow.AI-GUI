@@ -141,22 +141,22 @@ namespace Artflow.AI_GUI
             }
         }
 
-        private void savePreview_btn_Click(object sender, RoutedEventArgs e)
+        private void generatePreview(double dpi = 96,string suffix="")
         {
             Directory.CreateDirectory("previews");
 
             ArtflowImage currentImage = muhElement.DataContext as ArtflowImage;
-            if(currentImage == null || currentImage.ArtflowId==null)
+            if (currentImage == null || currentImage.ArtflowId == null)
             {
                 return;
             }
-            string filename = "previews/"+ currentImage.ArtflowId + " " + currentImage.TextPrompt+".png";
+            string filename = "previews/" + currentImage.ArtflowId + " " + currentImage.TextPrompt + suffix + ".png";
             filename = Helpers.GetUnusedFilename(filename);
 
-            int height = (int)NicePreview.ActualHeight+20;
-            int width = (int)NicePreview.ActualWidth;
+            int height = (int)((NicePreview.ActualHeight + 20)*dpi/96.0);
+            int width = (int)(NicePreview.ActualWidth*dpi/96.0);
 
-            RenderTargetBitmap bmp = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            RenderTargetBitmap bmp = new RenderTargetBitmap(width, height, dpi, dpi, PixelFormats.Pbgra32);
 
             bmp.Render(NicePreview);
 
@@ -168,6 +168,31 @@ namespace Artflow.AI_GUI
             {
                 encoder.Save(stm);
             }
+        }
+
+        private void savePreview_btn_Click(object sender, RoutedEventArgs e)
+        {
+            generatePreview();
+        }
+
+        private void savePreviewDouble_btn_Click(object sender, RoutedEventArgs e)
+        {
+            generatePreview(96 * 2,"_double");
+        }
+
+        private void saveImage_btn_Click(object sender, RoutedEventArgs e)
+        {
+            Directory.CreateDirectory("images");
+
+            ArtflowImage currentImage = muhElement.DataContext as ArtflowImage;
+            if (currentImage == null || currentImage.RawImageData == null)
+            {
+                return;
+            }
+            string filename = "images/" + currentImage.ArtflowId + " " + currentImage.TextPrompt + ".png";
+            filename = Helpers.GetUnusedFilename(filename);
+
+            File.WriteAllBytes(filename,currentImage.RawImageData);
         }
     }
 }
