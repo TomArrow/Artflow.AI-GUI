@@ -58,7 +58,7 @@ namespace Artflow.AI_GUI
             set
             {
                 artflowId = value;
-                RaisePropertyChanged("Id");
+                RaisePropertyChanged("ArtflowId");
             }
         }
         [Indexed]

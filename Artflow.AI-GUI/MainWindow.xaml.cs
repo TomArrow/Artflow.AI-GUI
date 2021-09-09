@@ -40,7 +40,7 @@ namespace Artflow.AI_GUI
             this.DataContext = this;
             InitializeComponent();
 
-            SQLiteConnection database = new SQLiteConnection(DATABASE_PATH);
+            SQLiteConnection database = new SQLiteConnection(DATABASE_PATH,false);
             database.CreateTable<ArtflowImage>();
 
             TableQuery<ArtflowImage> query = database.Table<ArtflowImage>().Where(v => v.Hidden.Equals(false));
@@ -66,12 +66,22 @@ namespace Artflow.AI_GUI
         {
             lock (DATABASE_PATH)
             {
-                SQLiteConnection database = new SQLiteConnection(DATABASE_PATH);
+                SQLiteConnection database = new SQLiteConnection(DATABASE_PATH, false);
                 database.CreateTable<ArtflowImage>();
 
                 if (database.Update(e.Item) == 0) // Means it didn't affect anything
                 {
                     database.Insert(e.Item);
+                }
+
+                if (e.PropertyName == "QueuePosition" && e.Item.ArtflowId.HasValue)
+                {
+                    database.CreateTable<QueuePositionHistory>();
+                    database.Insert(new QueuePositionHistory() { 
+                        ArtflowImageId = e.Item.ArtflowId.Value,
+                        QueuePosition = e.Item.QueuePosition.Value,
+                        When = DateTime.UtcNow
+                    });
                 }
 
                 database.Close();
@@ -83,7 +93,7 @@ namespace Artflow.AI_GUI
         {
             lock (DATABASE_PATH)
             {
-                SQLiteConnection database = new SQLiteConnection(DATABASE_PATH);
+                SQLiteConnection database = new SQLiteConnection(DATABASE_PATH, false);
                 database.CreateTable<ArtflowImage>();
 
                 if (e.Action == NotifyCollectionChangedAction.Remove ||
