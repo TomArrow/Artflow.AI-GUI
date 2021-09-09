@@ -1,0 +1,67 @@
+﻿<Window x:Class="Artflow.AI_GUI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:Artflow.AI_GUI"
+        mc:Ignorable="d"
+        Title="Cool Tool" Height="450" Width="800">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition></ColumnDefinition>
+            <ColumnDefinition Width="276"></ColumnDefinition>
+        </Grid.ColumnDefinitions>
+        <DockPanel Grid.Column="0" >
+            <WrapPanel Height="30" DockPanel.Dock="Top">
+                <TextBox MinWidth="470" x:Name="textPrompt_txt" MaxLength="140"></TextBox>
+                <Button x:Name="AddToQueue_btn" Click="AddToQueue_btn_Click">Add</Button>
+            </WrapPanel>
+            <ListBox ScrollViewer.VerticalScrollBarVisibility="Auto" x:Name="theList" ItemsSource="{Binding Path=Images}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel IsItemsHost="True" />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    
+                    <DataTemplate>
+                        <StackPanel Width="110" MinHeight="200">
+                            <Image Width="100" Height="100" Source="{Binding Path=AsImageSource}"></Image>
+                            <!--<Canvas Width="100" Height="100" Background="Aqua"></Canvas>-->
+                            <TextBlock FontWeight="Bold" Text="{Binding Path=TextPrompt}" TextWrapping="Wrap"></TextBlock>
+                            <TextBlock TextWrapping="Wrap">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0},{1},{2}">
+                                        <Binding Path="ArtflowId" />
+                                        <Binding Path="QueuePosition" />
+                                        <Binding Path="IsFailedInappropriate" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <!--<TextBlock Text="{Binding Path=UserId}"></TextBlock>-->
+                            
+                        </StackPanel>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+        <StackPanel Width="276" Grid.Column="1" HorizontalAlignment="Center" Background="DarkGray">
+            <Border Margin="0 10 0 0" x:Name="NicePreview">
+                <Border.OpacityMask>
+                    <VisualBrush>
+                        <VisualBrush.Visual>
+                            <Border CornerRadius="3" Height="{Binding ElementName=muhElement, Path=ActualHeight}" Width="256"  Background="White"/>
+                        </VisualBrush.Visual>
+                    </VisualBrush>
+                </Border.OpacityMask>
+                <StackPanel x:Name="muhElement" Width="256" DataContext="{Binding ElementName=theList, Path=SelectedItem}">
+                    <Image Width="256" Height="256" Source="{Binding Path=AsImageSource}"></Image>
+                    <TextBlock TextWrapping="Wrap" Background="White" Padding="16 16 16 32" Text="{Binding Path=TextPrompt}" Foreground="#343a40" FontFamily="Segoe UI" FontSize="20"></TextBlock>
+                </StackPanel>
+            </Border>
+
+            <Button Margin="20" x:Name="savePreview_btn" Click="savePreview_btn_Click">Save preview as PNG</Button>
+            
+        </StackPanel>
+    </Grid>
+</Window>
