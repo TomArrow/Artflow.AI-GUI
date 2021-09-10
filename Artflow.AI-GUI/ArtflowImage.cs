@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
@@ -100,15 +101,20 @@ namespace Artflow.AI_GUI
             }
         }
         [Ignore]
-        public ImageSource AsImageSource 
+        public  ImageSource AsImageSource 
         {
             get { return asImageSource; }
             set
             {
                 asImageSource = value;
                 RaisePropertyChanged("AsImageSource");
+                //AsyncRaisePropertyChanged("AsImageSource").Wait();
+                //await Task.Run(()=> { RaisePropertyChanged("AsImageSource")});
             }
         }
+
+
+
         [Indexed]
         public bool IsFailedInappropriate
         {
@@ -136,7 +142,8 @@ namespace Artflow.AI_GUI
             userId = generateUserId();
             status = STATUS.INITIALIZED;
 
-            _ = Task.Run(DoSomething);
+            //_ = Task.Run(()=> { DoSomething(); });
+            _ = Task.Factory.StartNew(() => { DoSomething(); }, TaskCreationOptions.LongRunning);
         }
 
         // Don't use this to create, it's just for querying from a database.
@@ -149,18 +156,38 @@ namespace Artflow.AI_GUI
         public void Activate(int delay=0)
         {
 
-            _ = Task.Run(()=> {
-                System.Threading.Thread.Sleep(delay*1000);
-                DoSomething();
-            });
+            /*_ = Task.Run(()=> {
+                
+                DoSomething(delay);
+            });*/
+            _ = Task.Factory.StartNew( ()=> {
+                
+                DoSomething(delay);
+            }, TaskCreationOptions.LongRunning);
         }
 
         // Periodically called to do some processing, the exact processing depending on the status of the image.
-        private async void DoSomething()
+        private async void DoSomething(int initialDelay=0)
         {
+            // Just for the finished images basically on loading the program
+            if (rawImageData != null && asImageSource == null)
+            {
+                /*Application.Current.Dispatcher.Invoke(() => {
+                    
+                });*/
 
-            
-            
+
+                ImageSource testConvert = RawImageToImageSource(rawImageData);
+                if (testConvert != null)
+                {
+                    testConvert.Freeze();
+                    AsImageSource = testConvert;
+                    //await setImageSourceAsync(testConvert);
+                }
+            }
+
+            System.Threading.Thread.Sleep(initialDelay * 1000);
+
 
             bool irreparableFail = false;
             while (!irreparableFail)
@@ -272,13 +299,19 @@ namespace Artflow.AI_GUI
 
                 if(rawImageData != null && asImageSource == null)
                 {
-                    Application.Current.Dispatcher.Invoke(() => {
+                    /*Application.Current.Dispatcher.Invoke(() => {
                         ImageSource testConvert = RawImageToImageSource(rawImageData);
                         if(testConvert != null)
                         {
                             AsImageSource = testConvert;
                         }
-                    });
+                    });*/
+                    ImageSource testConvert = RawImageToImageSource(rawImageData);
+                    if (testConvert != null)
+                    {
+                        testConvert.Freeze();
+                        AsImageSource = testConvert;
+                    }
                 }
 
 

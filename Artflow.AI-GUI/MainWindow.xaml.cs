@@ -49,7 +49,11 @@ namespace Artflow.AI_GUI
             foreach (ArtflowImage image in query)
             {
                 images.Add(image);
-                image.Activate((index++)* DELAYONLOADPERIMAGE);
+                image.Activate((index)* DELAYONLOADPERIMAGE);
+                if(image.QueuePosition != -1 && image.IsFailedInappropriate != true)
+                {
+                    index++;
+                }
             }
 
             database.Close();
@@ -64,11 +68,16 @@ namespace Artflow.AI_GUI
 
         private void Images_ItemPropertyChanged(object sender, ItemPropertyChangedEventArgs<ArtflowImage> e)
         {
+            if (e.PropertyName == "AsImageSource")
+            {
+                return; // Irrelevant change, only meaningful for GUI
+            }
             lock (DATABASE_PATH)
             {
                 SQLiteConnection database = new SQLiteConnection(DATABASE_PATH, false);
                 database.CreateTable<ArtflowImage>();
 
+                
                 if (database.Update(e.Item) == 0) // Means it didn't affect anything
                 {
                     database.Insert(e.Item);
