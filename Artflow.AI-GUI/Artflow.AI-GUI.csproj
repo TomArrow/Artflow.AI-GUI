@@ -5,10 +5,14 @@
     <TargetFramework>net5.0-windows</TargetFramework>
     <RootNamespace>Artflow.AI_GUI</RootNamespace>
     <UseWPF>true</UseWPF>
+    <Platforms>AnyCPU;x64</Platforms>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="sqlite-net-pcl" Version="1.8.116" />
+    <PackageReference Include="System.Drawing.Common" Version="5.0.2" />
+    <PackageReference Include="WebP_Net" Version="1.1.0" />
   </ItemGroup>
+
 
 </Project>

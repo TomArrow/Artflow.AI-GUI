@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -11,6 +12,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using WebP.Net;
 
 namespace Artflow.AI_GUI
 {
@@ -166,24 +168,33 @@ namespace Artflow.AI_GUI
             }, TaskCreationOptions.LongRunning);
         }
 
+        private async Task createImagesource()
+        {
+            ImageSource testConvert = RawImageToImageSource(rawImageData);
+            if(testConvert == null) 
+            {
+                testConvert = RawWebpImageToImageSource(rawImageData);
+            }
+            if (testConvert != null)
+            {
+                testConvert.Freeze();
+                AsImageSource = testConvert;
+                //await setImageSourceAsync(testConvert);
+            }
+        }
+
         // Periodically called to do some processing, the exact processing depending on the status of the image.
         private async void DoSomething(int initialDelay=0)
         {
             // Just for the finished images basically on loading the program
-            if (rawImageData != null && asImageSource == null)
+            if (queuePosition==-1 && rawImageData != null && asImageSource == null)
             {
                 /*Application.Current.Dispatcher.Invoke(() => {
                     
                 });*/
+                await createImagesource();
 
-
-                ImageSource testConvert = RawImageToImageSource(rawImageData);
-                if (testConvert != null)
-                {
-                    testConvert.Freeze();
-                    AsImageSource = testConvert;
-                    //await setImageSourceAsync(testConvert);
-                }
+                
             }
 
             System.Threading.Thread.Sleep(initialDelay * 1000);
@@ -268,7 +279,55 @@ namespace Artflow.AI_GUI
                             } else if (jsonResponse.current_rank == -1)
                             {
                                 // Fetch the finished image.
-                                PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket.s3.amazonaws.com/generated/"+artflowId+".png");
+                                //user_id_val
+                                PatientRequester.Response myWorkResponse = await PatientRequester.post("http://artflow.ai/show_my_work", new Dictionary<string, string>()
+                                {
+                                    { "user_id_val", userId}
+                                });
+                                string filename = null;
+                                if (myWorkResponse.success == false)
+                                {
+                                    temporaryFail = true;
+                                }
+                                else
+                                {
+                                    ImageProperties[] jsonMyWorkResponse = JsonSerializer.Deserialize<ImageProperties[]>(myWorkResponse.responseAsString, opt);
+                                    
+                                    foreach (ImageProperties props in jsonMyWorkResponse)
+                                    {
+                                        if(props.index == artflowId)
+                                        {
+                                            filename = props.filename;
+                                        }
+                                    }
+                                    if(filename == null)
+                                    {
+                                        temporaryFail = true;
+                                    }
+                                }
+                                if(filename != null)
+                                {
+                                    //tmpReceivedFilename = filename;
+                                    PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket-new.s3.amazonaws.com/generated/" + filename + ".webp");
+                                    if (imageFetchResponse.success == false)
+                                    {
+                                        temporaryFail = true;
+                                    }
+                                    else
+                                    {
+                                        
+                                        RawImageData = imageFetchResponse.rawData;
+                                        QueuePosition = -1;
+                                        Application.Current.Dispatcher.Invoke(() => {
+                                            Directory.CreateDirectory("images");
+                                            string saveFilename = GetUnusedFilename("images/" + artflowId + " " + textPrompt+" [" + filename + "].webp");
+                                            File.WriteAllBytes(saveFilename, imageFetchResponse.rawData);
+
+
+                                        });
+                                    }
+                                }
+                                /*PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket.s3.amazonaws.com/generated/"+artflowId+".png");
                                 if(imageFetchResponse.success == false)
                                 {
                                     temporaryFail = true;
@@ -283,7 +342,7 @@ namespace Artflow.AI_GUI
 
 
                                     });
-                                }
+                                }*/
                             }
                             else
                             {
@@ -297,7 +356,7 @@ namespace Artflow.AI_GUI
                     }
                 }
 
-                if(rawImageData != null && asImageSource == null)
+                if(queuePosition == -1 && rawImageData != null && asImageSource == null)
                 {
                     /*Application.Current.Dispatcher.Invoke(() => {
                         ImageSource testConvert = RawImageToImageSource(rawImageData);
@@ -306,12 +365,15 @@ namespace Artflow.AI_GUI
                             AsImageSource = testConvert;
                         }
                     });*/
+
+                    await createImagesource();
+                    /*
                     ImageSource testConvert = RawImageToImageSource(rawImageData);
                     if (testConvert != null)
                     {
                         testConvert.Freeze();
                         AsImageSource = testConvert;
-                    }
+                    }*/
                 }
 
 
@@ -373,6 +435,36 @@ namespace Artflow.AI_GUI
                 return null;
             }
             
+        }
+
+        static public BitmapImage RawWebpImageToImageSource(byte[] rawImageData)
+        {
+            try
+            {
+                Image decodedWebp = null;
+                using(WebPObject temp = new WebPObject(rawImageData))
+                {
+                    
+                    decodedWebp = temp.GetImage();
+                    using (MemoryStream memory = new MemoryStream())
+                    {
+                        decodedWebp.Save(memory, System.Drawing.Imaging.ImageFormat.Bmp);
+                        memory.Position = 0;
+                        BitmapImage bitmapimage = new BitmapImage();
+                        bitmapimage.BeginInit();
+                        bitmapimage.StreamSource = memory;
+                        bitmapimage.CacheOption = BitmapCacheOption.OnLoad;
+                        bitmapimage.EndInit();
+
+                        return bitmapimage;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                return null;
+            }
+
         }
 
     }
