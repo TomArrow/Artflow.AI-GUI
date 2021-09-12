@@ -14,5 +14,4 @@
     <PackageReference Include="WebP_Net" Version="1.1.0" />
   </ItemGroup>
 
-
 </Project>

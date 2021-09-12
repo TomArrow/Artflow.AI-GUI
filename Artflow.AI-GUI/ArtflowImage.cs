@@ -29,12 +29,22 @@ namespace Artflow.AI_GUI
             FAIL_IRREPARABLE_MISC=25, // For everything unexplained 
         }
 
+        public enum RAWDATATYPE
+        {
+            UNSPECIFIED=0,
+            PNG=1,
+            WEBP=2
+        }
+
         private STATUS status = STATUS.INITIALIZED;
+        private RAWDATATYPE rawDataType = RAWDATATYPE.UNSPECIFIED;
 
         private const int WAITTIME_BETWEEN_UPDATES = 60;
 
         private bool hidden = false;
+        private bool hasNoFilename = false; // Means it's an old one probably.
         private int? artflowId;
+        private string artflowFilename;
         private string textPrompt;
         private string userId;
         private int? queuePosition = int.MaxValue;
@@ -55,6 +65,16 @@ namespace Artflow.AI_GUI
         public int Id { get; set; }
 
         [Indexed]
+        public RAWDATATYPE RawDataType
+        {
+            get { return rawDataType; }
+            set
+            {
+                rawDataType = value;
+                RaisePropertyChanged("RawDataType");
+            }
+        }
+        [Indexed]
         public int? ArtflowId
         {
             get { return artflowId; }
@@ -72,6 +92,16 @@ namespace Artflow.AI_GUI
             {
                 textPrompt = value;
                 RaisePropertyChanged("TextPrompt");
+            }
+        }
+        [Indexed]
+        public string ArtflowFilename 
+        {
+            get { return artflowFilename; }
+            set
+            {
+                artflowFilename = value;
+                RaisePropertyChanged("ArtflowFilename");
             }
         }
         public string UserId 
@@ -117,6 +147,16 @@ namespace Artflow.AI_GUI
 
 
 
+        [Indexed]
+        public bool HasNoFilename
+        {
+            get { return hasNoFilename; }
+            set
+            {
+                hasNoFilename = value;
+                RaisePropertyChanged("HasNoFilename");
+            }
+        }
         [Indexed]
         public bool IsFailedInappropriate
         {
@@ -174,6 +214,13 @@ namespace Artflow.AI_GUI
             if(testConvert == null) 
             {
                 testConvert = RawWebpImageToImageSource(rawImageData);
+                if (testConvert != null)
+                {
+                    RawDataType = RAWDATATYPE.WEBP;
+                }
+            } else
+            {
+                RawDataType = RAWDATATYPE.PNG;
             }
             if (testConvert != null)
             {
@@ -207,7 +254,7 @@ namespace Artflow.AI_GUI
                 bool temporaryFail = false;
 
                 // Step 1
-                if(artflowId == null)
+                if (artflowId == null)
                 {
                     if (isFailedInappropriate)
                     {
@@ -215,10 +262,10 @@ namespace Artflow.AI_GUI
                         break;
                     }
 
-                    PatientRequester.Response response= await PatientRequester.post("https://artflow.ai/add_to_generation_queue", new Dictionary<string, string>()
+                    PatientRequester.Response response = await PatientRequester.post("https://artflow.ai/add_to_generation_queue", new Dictionary<string, string>()
                     {
                         { "text_prompt", textPrompt},
-                        { "user_id_val", userId} 
+                        { "user_id_val", userId}
                     });
 
                     if (response.success == false)
@@ -227,7 +274,7 @@ namespace Artflow.AI_GUI
                     } else
                     {
 
-                        Logger.Log("add_to_generation_queue",response.responseAsString);
+                        Logger.Log("add_to_generation_queue", response.responseAsString);
 
                         try {
                             AddToGenerationQueueResponse jsonResponse = JsonSerializer.Deserialize<AddToGenerationQueueResponse>(response.responseAsString, opt);
@@ -244,12 +291,56 @@ namespace Artflow.AI_GUI
                                 QueuePosition = jsonResponse.queue_length;
                             }
                         }
-                        catch (Exception e){
+                        catch (Exception e) {
                             temporaryFail = true;
                         }
                     }
 
-                } else if (queuePosition.HasValue && queuePosition > -1 && artflowId.HasValue)
+                } else if (artflowId.HasValue && artflowFilename == null && hasNoFilename == false) {
+
+                    bool hasNoFilenameTmp = false;
+                    PatientRequester.Response myWorkResponse = await PatientRequester.post("http://artflow.ai/show_my_work", new Dictionary<string, string>()
+                    {
+                        { "user_id_val", userId}
+                    });
+                    string filename = null;
+                    if (myWorkResponse.success == false)
+                    {
+                        temporaryFail = true;
+                    }
+                    else
+                    {
+                        Logger.Log("show_my_work-" + artflowId, myWorkResponse.responseAsString);
+                        ImageProperties[] jsonMyWorkResponse = JsonSerializer.Deserialize<ImageProperties[]>(myWorkResponse.responseAsString, opt);
+
+                        foreach (ImageProperties props in jsonMyWorkResponse)
+                        {
+                            if (props.index == artflowId)
+                            {
+                                filename = props.filename;
+                                if(props.filename == null)
+                                {
+                                    hasNoFilenameTmp = true;
+                                }
+                            }
+                        }
+                        if (filename == null && hasNoFilenameTmp==false)
+                        {
+                            temporaryFail = true;
+                        }
+                    }
+
+                    if(filename != null)
+                    {
+                        ArtflowFilename = filename;
+                    }
+
+                    if (hasNoFilenameTmp)
+                    {
+                        HasNoFilename = true;
+                    }
+
+                } else if (queuePosition.HasValue && (artflowFilename != null || hasNoFilename) && queuePosition > -1 && artflowId.HasValue)
                 {
                     // Just update the position then
                     PatientRequester.Response response = await PatientRequester.post("https://artflow.ai/check_status", new Dictionary<string, string>()
@@ -264,85 +355,66 @@ namespace Artflow.AI_GUI
                     else
                     {
 
-                        Logger.Log("check_status-"+artflowId, response.responseAsString);
+                        Logger.Log("check_status-" + artflowId, response.responseAsString);
 
                         try
                         {
                             CheckStatusResponse jsonResponse = JsonSerializer.Deserialize<CheckStatusResponse>(response.responseAsString, opt);
-                            
-                            
+
+
                             if (jsonResponse.current_rank > -1)
                             {
                                 // Just update position.
                                 QueuePosition = jsonResponse.current_rank;
-                                
+
                             } else if (jsonResponse.current_rank == -1)
                             {
                                 // Fetch the finished image.
                                 //user_id_val
-                                PatientRequester.Response myWorkResponse = await PatientRequester.post("http://artflow.ai/show_my_work", new Dictionary<string, string>()
-                                {
-                                    { "user_id_val", userId}
-                                });
-                                string filename = null;
-                                if (myWorkResponse.success == false)
-                                {
-                                    temporaryFail = true;
-                                }
-                                else
-                                {
-                                    ImageProperties[] jsonMyWorkResponse = JsonSerializer.Deserialize<ImageProperties[]>(myWorkResponse.responseAsString, opt);
-                                    
-                                    foreach (ImageProperties props in jsonMyWorkResponse)
-                                    {
-                                        if(props.index == artflowId)
-                                        {
-                                            filename = props.filename;
-                                        }
-                                    }
-                                    if(filename == null)
-                                    {
-                                        temporaryFail = true;
-                                    }
-                                }
-                                if(filename != null)
-                                {
-                                    //tmpReceivedFilename = filename;
-                                    PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket-new.s3.amazonaws.com/generated/" + filename + ".webp");
+
+                                if (!hasNoFilename) { 
+
+                                    // Newer webp type
+                                    PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket-new.s3.amazonaws.com/generated/" + artflowFilename + ".webp");
                                     if (imageFetchResponse.success == false)
                                     {
                                         temporaryFail = true;
                                     }
                                     else
                                     {
-                                        
+
                                         RawImageData = imageFetchResponse.rawData;
                                         QueuePosition = -1;
                                         Application.Current.Dispatcher.Invoke(() => {
                                             Directory.CreateDirectory("images");
-                                            string saveFilename = GetUnusedFilename("images/" + artflowId + " " + textPrompt+" [" + filename + "].webp");
+                                            string saveFilename = GetUnusedFilename("images/" + artflowId + " " + textPrompt + ".webp");
                                             File.WriteAllBytes(saveFilename, imageFetchResponse.rawData);
+
+                                        });
+                                    }
+                                } else
+                                {
+                                    // Old png type
+                                    // TODO Make it attempt png download first
+                                    // The new filenames were introduced a while ago but final switch came later.
+                                    PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket.s3.amazonaws.com/generated/" + artflowId + ".png");
+                                    if (imageFetchResponse.success == false)
+                                    {
+                                        temporaryFail = true;
+                                    }
+                                    else
+                                    {
+                                        RawImageData = imageFetchResponse.rawData;
+                                        QueuePosition = -1;
+                                        Application.Current.Dispatcher.Invoke(() => {
+                                            Directory.CreateDirectory("images");
+                                            string filename = GetUnusedFilename("images/" + artflowId + " " + textPrompt + ".png");
+                                            File.WriteAllBytes(filename, imageFetchResponse.rawData);
 
 
                                         });
                                     }
                                 }
-                                /*PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket.s3.amazonaws.com/generated/"+artflowId+".png");
-                                if(imageFetchResponse.success == false)
-                                {
-                                    temporaryFail = true;
-                                } else
-                                {
-                                    RawImageData = imageFetchResponse.rawData;
-                                    QueuePosition = -1;
-                                    Application.Current.Dispatcher.Invoke(() => {
-                                        Directory.CreateDirectory("images");
-                                        string filename = GetUnusedFilename("images/"+artflowId+" "+textPrompt+".png");
-                                        File.WriteAllBytes(filename,imageFetchResponse.rawData);
-
-
-                                    });
-                                }*/
                             }
                             else
                             {

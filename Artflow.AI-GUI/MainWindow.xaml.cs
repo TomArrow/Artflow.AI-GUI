@@ -50,7 +50,7 @@ namespace Artflow.AI_GUI
             {
                 images.Add(image);
                 image.Activate((index)* DELAYONLOADPERIMAGE);
-                if(image.QueuePosition != -1 && image.IsFailedInappropriate != true)
+                if((image.QueuePosition != -1 && image.IsFailedInappropriate != true) || (image.ArtflowFilename == null && image.HasNoFilename != true && image.IsFailedInappropriate != true))
                 {
                     index++;
                 }
@@ -191,14 +191,27 @@ namespace Artflow.AI_GUI
 
         private void saveImage_btn_Click(object sender, RoutedEventArgs e)
         {
+            
+
             Directory.CreateDirectory("images");
 
             ArtflowImage currentImage = muhElement.DataContext as ArtflowImage;
-            if (currentImage == null || currentImage.RawImageData == null)
+            if (currentImage == null || currentImage.RawImageData == null || currentImage.RawDataType == ArtflowImage.RAWDATATYPE.UNSPECIFIED)
             {
                 return;
             }
-            string filename = "images/" + currentImage.ArtflowId + " " + currentImage.TextPrompt + ".png";
+            string extension = "";
+            switch (currentImage.RawDataType)
+            {
+                case ArtflowImage.RAWDATATYPE.PNG:
+                    extension = ".png";
+                    break;
+                case ArtflowImage.RAWDATATYPE.WEBP:
+                    extension = ".webp";
+                    break;
+            }
+
+            string filename = "images/" + currentImage.ArtflowId + " " + currentImage.TextPrompt + extension;
             filename = Helpers.GetUnusedFilename(filename);
 
             File.WriteAllBytes(filename,currentImage.RawImageData);
