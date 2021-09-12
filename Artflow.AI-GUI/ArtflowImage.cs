@@ -360,14 +360,118 @@ namespace Artflow.AI_GUI
                         try
                         {
                             CheckStatusResponse jsonResponse = JsonSerializer.Deserialize<CheckStatusResponse>(response.responseAsString, opt);
+                            
+                            bool queuePositionIsHigherThanBefore = jsonResponse.current_rank > queuePosition;
 
-
-                            if (jsonResponse.current_rank > -1)
+                            if (jsonResponse.current_rank > -1 && !queuePositionIsHigherThanBefore)
                             {
+                                
                                 // Just update position.
                                 QueuePosition = jsonResponse.current_rank;
 
-                            } else if (jsonResponse.current_rank == -1)
+                            } else if (jsonResponse.current_rank > -1 && queuePositionIsHigherThanBefore)
+                            {
+                                // This is a special case sometimes when you miss the timeframe of receiving the -1 status code
+                                // When you wait too long to request the updated queue position, you start getting random numbers
+                                // This can happen after hours but seldom also after minutes.
+                                // The only way we can detect it is by doing this sanity check that the new queue position should not be higher than the previous,
+                                // which with random numbers will happen eventually
+
+                                // First we save the new position anyway for history purposes.
+                                QueuePosition = jsonResponse.current_rank;
+
+                                // Once this has happened, the only way to find out if we finished processing
+                                // is to query show_my_work again
+                                PatientRequester.Response myWorkResponse = await PatientRequester.post("http://artflow.ai/show_my_work", new Dictionary<string, string>()
+                                {
+                                    { "user_id_val", userId}
+                                });
+                                string filename = null;
+                                if (myWorkResponse.success == false)
+                                {
+                                    temporaryFail = true;
+                                }
+                                else
+                                {
+                                    Logger.Log("show_my_work-trippedByRandomDetector-" + artflowId, myWorkResponse.responseAsString);
+                                    ImageProperties[] jsonMyWorkResponse = JsonSerializer.Deserialize<ImageProperties[]>(myWorkResponse.responseAsString, opt);
+
+                                    string status = null;
+                                    foreach (ImageProperties props in jsonMyWorkResponse)
+                                    {
+                                        if (props.index == artflowId)
+                                        {
+                                            status = props.status;
+                                        }
+                                    }
+                                    if(status == null)
+                                    {
+                                        // Weird. Means likely the item wasn't found.
+                                        // Possible reason: More than 6 requests with that userId
+                                        // Shouldn't happen really, but handle it just in case.
+                                        temporaryFail = true;
+                                    } else
+                                    {
+                                        if(status== "Queuing")
+                                        {
+                                            // Guess it's still in the queue after all. Nothing to do then.
+
+                                        } else if(status == "Finished")
+                                        {
+                                            // So it IS done already.
+                                            // Proceed as if check_status was -1
+                                            if (!hasNoFilename)
+                                            {
+
+                                                // Newer webp type
+                                                PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket-new.s3.amazonaws.com/generated/" + artflowFilename + ".webp");
+                                                if (imageFetchResponse.success == false)
+                                                {
+                                                    temporaryFail = true;
+                                                }
+                                                else
+                                                {
+
+                                                    RawImageData = imageFetchResponse.rawData;
+                                                    QueuePosition = -1;
+                                                    Application.Current.Dispatcher.Invoke(() => {
+                                                        Directory.CreateDirectory("images");
+                                                        string saveFilename = GetUnusedFilename("images/" + artflowId + " " + textPrompt + ".webp");
+                                                        File.WriteAllBytes(saveFilename, imageFetchResponse.rawData);
+
+                                                    });
+                                                }
+                                            }
+                                            else
+                                            {
+                                                // Old png type
+                                                // TODO Make it attempt png download first
+                                                // The new filenames were introduced a while ago but final switch came later.
+                                                PatientRequester.Response imageFetchResponse = await PatientRequester.get("https://artflowbucket.s3.amazonaws.com/generated/" + artflowId + ".png");
+                                                if (imageFetchResponse.success == false)
+                                                {
+                                                    temporaryFail = true;
+                                                }
+                                                else
+                                                {
+                                                    RawImageData = imageFetchResponse.rawData;
+                                                    QueuePosition = -1;
+                                                    Application.Current.Dispatcher.Invoke(() => {
+                                                        Directory.CreateDirectory("images");
+                                                        string filename = GetUnusedFilename("images/" + artflowId + " " + textPrompt + ".png");
+                                                        File.WriteAllBytes(filename, imageFetchResponse.rawData);
+
+
+                                                    });
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                            }
+                            // Finished processing! Handle.
+                            else if (jsonResponse.current_rank == -1)
                             {
                                 // Fetch the finished image.
                                 //user_id_val
