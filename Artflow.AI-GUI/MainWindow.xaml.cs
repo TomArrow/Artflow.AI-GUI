@@ -192,7 +192,6 @@ namespace Artflow.AI_GUI
         private void saveImage_btn_Click(object sender, RoutedEventArgs e)
         {
             
-
             Directory.CreateDirectory("images");
 
             ArtflowImage currentImage = muhElement.DataContext as ArtflowImage;
